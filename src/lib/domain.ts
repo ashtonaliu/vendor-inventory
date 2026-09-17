@@ -4,7 +4,9 @@
 export const ITEM_KINDS = ["single", "sealed"] as const;
 export const CONDITIONS = ["NM", "LP", "MP", "HP", "DMG"] as const;
 export const CHANNELS = ["show", "ebay", "tcgplayer", "local", "other"] as const;
-export const GRADERS = ["PSA", "CGC", "BGS", "TAG"] as const;
+export const GRADERS = ["PSA", "CGC", "BGS", "SGC", "TAG"] as const;
+export const CARD_LADDER_GRADERS = ["PSA", "BGS", "CGC", "SGC"] as const;
+export const CERT_NUMBER = /^[A-Za-z0-9-]{4,20}$/;
 export const GRADE_OPTIONS = ["10", "9.5", "9", "8.5", "8", "7", "6", "5", "4", "3", "2", "1"] as const;
 
 export type ItemKind = (typeof ITEM_KINDS)[number];

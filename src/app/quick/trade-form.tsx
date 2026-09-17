@@ -18,7 +18,7 @@ import { CatalogPicker, StockPicker } from "./item-pickers";
 import type { Where } from "./where-picker";
 
 type GiveLine = { lot: StockResult; qty: number; marketOverride: string | null };
-type GetLine = { key: number; item: CatalogResult; grading: Grading; qty: number; marketOverride: string | null };
+type GetLine = { key: number; item: CatalogResult; grading: Grading; certNumber: string; qty: number; marketOverride: string | null };
 type CashDirection = "none" | "in" | "out";
 
 const smallInput =
@@ -80,7 +80,7 @@ export function TradeForm({
 
   function addGet(item: CatalogResult) {
     const grading: Grading = item.kind === "sealed" ? { condition: null, grader: null, grade: null } : { condition: "NM", grader: null, grade: null };
-    setGet((lines) => [...lines, { key: nextKey, item, grading, qty: 1, marketOverride: null }]);
+    setGet((lines) => [...lines, { key: nextKey, item, grading, certNumber: "", qty: 1, marketOverride: null }]);
     setNextKey((k) => k + 1);
     setAdding(null);
     setError(null);
@@ -95,7 +95,13 @@ export function TradeForm({
     startTransition(async () => {
       const result = await recordTradeAction({
         give: give.map((l, i) => ({ lotId: l.lot.lotId, qty: l.qty, unitMarketCents: giveMarkets[i]! })),
-        get: get.map((l, i) => ({ itemId: l.item.itemId, ...l.grading, qty: l.qty, unitMarketCents: getMarkets[i]! })),
+        get: get.map((l, i) => ({
+          itemId: l.item.itemId,
+          ...l.grading,
+          certNumber: l.grading.grader ? l.certNumber : null,
+          qty: l.qty,
+          unitMarketCents: getMarkets[i]!,
+        })),
         cashInCents: cashDirection === "in" ? cashCents : 0,
         cashOutCents: cashDirection === "out" ? cashCents : 0,
         ...where,
@@ -165,7 +171,19 @@ export function TradeForm({
             onRemove={() => setGet((lines) => lines.filter((_, j) => j !== i))}
           >
             {line.item.kind === "single" && (
-              <GradingSelect value={line.grading} onChange={(grading) => update(setGet, i, { grading, marketOverride: null })} />
+              <>
+                <GradingSelect value={line.grading} onChange={(grading) => update(setGet, i, { grading, marketOverride: null })} />
+                {line.grading.grader && (
+                  <input
+                    aria-label={`Cert number for ${line.item.name}`}
+                    placeholder="Cert number (optional)"
+                    autoComplete="off"
+                    value={line.certNumber}
+                    onChange={(e) => update(setGet, i, { certNumber: e.target.value })}
+                    className={smallInput}
+                  />
+                )}
+              </>
             )}
           </LineCard>
         ))}

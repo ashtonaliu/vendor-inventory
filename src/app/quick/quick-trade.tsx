@@ -40,6 +40,7 @@ export function QuickTrade({
   const [lot, setLot] = useState<StockResult | null>(null);
   const [item, setItem] = useState<CatalogResult | null>(null);
   const [grading, setGrading] = useState<Grading>({ condition: "NM", grader: null, grade: null });
+  const [certNumber, setCertNumber] = useState("");
 
   const [price, setPrice] = useState("");
   const [qty, setQty] = useState(1);
@@ -75,6 +76,7 @@ export function QuickTrade({
           : null;
 
   function clearDeal() {
+    setCertNumber("");
     setLot(null);
     setItem(null);
     setGrading({ condition: "NM", grader: null, grade: null });
@@ -127,6 +129,7 @@ export function QuickTrade({
         const result = await recordBuyAction({
           itemId: item.itemId,
           ...grading,
+          certNumber: grading.grader ? certNumber : null,
           qty,
           unitPriceCents: priceCents,
           unitMarketCents: marketCents,
@@ -284,6 +287,20 @@ export function QuickTrade({
                     ))}
                   </select>
                 </div>
+              )}
+              {grading.grader && (
+                <input
+                  aria-label="Cert number"
+                  placeholder="Cert number (optional, for Card Ladder value)"
+                  inputMode="text"
+                  autoComplete="off"
+                  value={certNumber}
+                  onChange={(e) => {
+                    setCertNumber(e.target.value);
+                    setError(null);
+                  }}
+                  className="h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-base dark:border-zinc-700 dark:bg-zinc-900"
+                />
               )}
             </fieldset>
           )}

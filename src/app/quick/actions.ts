@@ -1,10 +1,11 @@
 "use server";
 
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { events, items, realizedSales } from "@/db/schema";
+import { events, items, lots, realizedSales } from "@/db/schema";
 import {
+  CERT_NUMBER,
   CHANNELS,
   CONDITIONS,
   GRADERS,
@@ -60,6 +61,16 @@ function normalizeGrading(kind: ItemKind, input: Partial<Grading> | null | undef
   return { condition: input!.condition!, grader: null, grade: null };
 }
 
+// A cert identifies one physical slab, so it's only valid on a graded lot of one.
+function normalizeCert(grading: Grading, certNumber: unknown, qty: number): string | null | { error: string } {
+  const cert = typeof certNumber === "string" ? certNumber.trim() : "";
+  if (cert === "") return null;
+  if (!grading.grader) return { error: "Only graded slabs have cert numbers." };
+  if (!CERT_NUMBER.test(cert)) return { error: "Cert numbers are 4 to 20 letters, digits, or dashes." };
+  if (qty !== 1) return { error: "A cert number belongs to one slab, so set the quantity to 1." };
+  return cert;
+}
+
 export type SaleRequest = {
   lotId: number;
   qty: number;
@@ -112,6 +123,7 @@ export type BuyRequest = {
   condition: Condition | null;
   grader: string | null;
   grade: string | null;
+  certNumber?: string | null;
   qty: number;
   unitPriceCents: number;
   unitMarketCents: number;
@@ -132,6 +144,8 @@ export async function recordBuyAction(input: BuyRequest): Promise<Result<{ trans
 
   const grading = normalizeGrading(item.kind, input);
   if (typeof grading === "string") return { ok: false, error: grading };
+  const certNumber = normalizeCert(grading, input.certNumber, input.qty);
+  if (certNumber && typeof certNumber === "object") return { ok: false, error: certNumber.error };
 
   const where = await resolveWhere(input.eventId, input.channel);
   if (typeof where === "string") return { ok: false, error: where };
@@ -140,6 +154,7 @@ export async function recordBuyAction(input: BuyRequest): Promise<Result<{ trans
     const result = await recordBuy({
       itemId: input.itemId,
       ...grading,
+      certNumber,
       qty: input.qty,
       unitPriceCents: input.unitPriceCents,
       unitMarketCents: input.unitMarketCents,
@@ -203,7 +218,7 @@ export async function createEventAction(input: NewEventRequest): Promise<Result<
 
 export type TradeRequest = {
   give: { lotId: number; qty: number; unitMarketCents: number }[];
-  get: (Grading & { itemId: number; qty: number; unitMarketCents: number })[];
+  get: (Grading & { itemId: number; qty: number; unitMarketCents: number; certNumber?: string | null })[];
   cashInCents: number;
   cashOutCents: number;
   eventId: number | null;
@@ -237,13 +252,15 @@ export async function recordTradeAction(input: TradeRequest): Promise<Result<{ t
       (r) => [r.id, r.kind],
     ),
   );
-  const normalizedGet: TradeRequest["get"] = [];
+  const normalizedGet: (Grading & { itemId: number; qty: number; unitMarketCents: number; certNumber: string | null })[] = [];
   for (const line of get) {
     const kind = kinds.get(line.itemId);
     if (!kind) return { ok: false, error: "One of the cards you're getting doesn't exist." };
     const grading = normalizeGrading(kind, line);
     if (typeof grading === "string") return { ok: false, error: grading };
-    normalizedGet.push({ itemId: line.itemId, qty: line.qty, unitMarketCents: line.unitMarketCents, ...grading });
+    const certNumber = normalizeCert(grading, line.certNumber, line.qty);
+    if (certNumber && typeof certNumber === "object") return { ok: false, error: certNumber.error };
+    normalizedGet.push({ itemId: line.itemId, qty: line.qty, unitMarketCents: line.unitMarketCents, ...grading, certNumber });
   }
 
   const where = await resolveWhere(input.eventId, input.channel);
@@ -273,4 +290,20 @@ export async function recordTradeAction(input: TradeRequest): Promise<Result<{ t
     console.error("recordTradeAction failed", err);
     return { ok: false, error: "Couldn't save the trade. Try again." };
   }
+}
+
+export async function updateLotCertAction(input: { lotId: number; certNumber: string }): Promise<Result<{ certNumber: string | null }>> {
+  if (!isId(input?.lotId)) return { ok: false, error: "That item doesn't exist." };
+  const [lot] = await db
+    .select({ grader: lots.grader, grade: lots.grade, qtyAcquired: lots.qtyAcquired })
+    .from(lots)
+    .where(and(eq(lots.id, input.lotId), isNotNull(lots.grader)));
+  if (!lot) return { ok: false, error: "Only graded slabs have cert numbers." };
+
+  const certNumber = normalizeCert({ condition: null, grader: lot.grader, grade: lot.grade }, input.certNumber, lot.qtyAcquired);
+  if (certNumber && typeof certNumber === "object") return { ok: false, error: certNumber.error };
+
+  await db.update(lots).set({ certNumber }).where(eq(lots.id, input.lotId));
+  revalidateAll();
+  return { ok: true, certNumber };
 }

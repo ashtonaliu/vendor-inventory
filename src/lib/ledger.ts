@@ -15,6 +15,7 @@ export type BuyInput = {
   condition?: Condition | null;
   grader?: string | null;
   grade?: string | null;
+  certNumber?: string | null;
   qty: number;
   unitPriceCents: number;
   unitMarketCents: number;
@@ -51,6 +52,7 @@ export async function recordBuy(input: BuyInput) {
         condition: input.condition ?? null,
         grader: input.grader ?? null,
         grade: input.grade ?? null,
+        certNumber: input.certNumber ?? null,
         qtyAcquired: input.qty,
         qtyRemaining: input.qty,
         unitCostCents,
@@ -130,6 +132,7 @@ export type TradeInput = {
     condition: Condition | null;
     grader: string | null;
     grade: string | null;
+    certNumber: string | null;
     qty: number;
     unitMarketCents: number;
   }[];
@@ -193,6 +196,7 @@ export async function recordTrade(input: TradeInput) {
           condition: line.condition,
           grader: line.grader,
           grade: line.grade,
+          certNumber: line.certNumber,
           qtyAcquired: line.qty,
           qtyRemaining: line.qty,
           unitCostCents: line.unitMarketCents,

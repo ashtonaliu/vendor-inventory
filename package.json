@@ -11,7 +11,9 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx --env-file=.env.local src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
-    "prices:sync": "tsx --env-file=.env.local src/scripts/sync-prices.ts"
+    "prices:sync": "tsx --env-file=.env.local src/scripts/sync-prices.ts",
+    "graded:sync": "tsx --env-file=.env.local src/scripts/sync-graded.ts",
+    "cardladder:probe": "tsx --env-file=.env.local src/scripts/probe-cardladder.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

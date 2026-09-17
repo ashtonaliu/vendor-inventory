@@ -37,7 +37,23 @@ products, roughly 80 seconds):
   marked `partial` rather than stopping. A unique index allows only one sync to run at a time.
 
 TCGplayer's market price is effectively the Near Mint price, so lower conditions still use the
-condition multipliers. Graded prices aren't included and are entered manually.
+condition multipliers.
+
+### Graded prices (Card Ladder, optional)
+
+Slabs with a cert number can be valued with Card Ladder data through
+[Parse's Card Ladder API](https://parse.bot/marketplace/5554022d-8a04-46d0-b2c5-56f3b5abcea2/cardladder-com-api),
+an unofficial third-party wrapper. Add cert numbers when buying or trading a slab, or on the
+Inventory page, and set `PARSE_API_KEY` in `.env.local`.
+
+`npm run graded:sync` values every slab still in stock (PSA, BGS, CGC, SGC) with one bulk request
+per 200 certs (3 credits each, so a daily run fits the free tier), and saves the value as that card's
+graded price, e.g. `PSA10`. Slabs of the same card and grade are averaged.
+
+Parse doesn't document its response format, so it was checked against a real response (values are
+whole dollars). If Parse changes it, set `RESPONSE_FORMAT_VERIFIED` in
+[`src/lib/cardladder.ts`](src/lib/cardladder.ts) to `false`, which stops the sync from writing prices,
+and inspect a live response with `npm run cardladder:probe` (one request, 3 credits).
 
 ## Data model
 
@@ -80,5 +96,7 @@ Postgres isn't set to start at login, so after a restart run the `pg_ctl ... sta
 | `npm run db:generate` | Generate a migration after editing `src/db/schema.ts` |
 | `npm run db:migrate` | Apply pending migrations |
 | `npm run db:seed` | Reset the database to sample data (**deletes existing data**, including the catalog; run `prices:sync` after) |
+| `npm run graded:sync` | Value slabs with cert numbers using Card Ladder (needs `PARSE_API_KEY`) |
+| `npm run cardladder:probe` | Make one Card Ladder request and print the raw response. `-- --cert 12345678 --grader PSA` picks the slab |
 | `npm run prices:sync` | Import the TCGplayer catalog and today's prices. `-- --only "Evolving Skies"` limits it to matching sets |
 | `npm run db:studio` | Browse the database in Drizzle Studio |

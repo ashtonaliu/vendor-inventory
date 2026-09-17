@@ -89,6 +89,7 @@ export const lots = pgTable(
     condition: cardCondition("condition"),
     grader: text("grader"),
     grade: numeric("grade", { precision: 3, scale: 1 }),
+    certNumber: text("cert_number"),
     qtyAcquired: integer("qty_acquired").notNull(),
     qtyRemaining: integer("qty_remaining").notNull(),
     unitCostCents: integer("unit_cost_cents").notNull(),
@@ -99,6 +100,8 @@ export const lots = pgTable(
     index("lots_item_idx").on(t.itemId),
     check("qty_remaining_in_range", sql`${t.qtyRemaining} between 0 and ${t.qtyAcquired}`),
     check("grader_and_grade_together", sql`(${t.grader} is null) = (${t.grade} is null)`),
+    check("cert_only_on_single_slab", sql`${t.certNumber} is null or (${t.grader} is not null and ${t.qtyAcquired} = 1)`),
+    index("lots_cert_idx").on(t.grader, t.certNumber),
   ],
 );
 
@@ -178,6 +181,7 @@ export const lotValuations = pgView("lot_valuations", {
   condition: cardCondition("condition"),
   grader: text("grader"),
   grade: numeric("grade", { precision: 3, scale: 1 }),
+  certNumber: text("cert_number"),
   qtyRemaining: integer("qty_remaining").notNull(),
   unitCostCents: integer("unit_cost_cents").notNull(),
   acquiredAt: timestamp("acquired_at", { withTimezone: true }).notNull(),

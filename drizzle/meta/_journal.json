@@ -36,6 +36,20 @@
       "when": 1789635340037,
       "tag": "0004_price_sources_view",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789636572015,
+      "tag": "0005_lot_cert_numbers",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789636572316,
+      "tag": "0006_lot_valuations_cert",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CardThumb } from "@/components/card-thumb";
+import { CertEditor } from "@/components/cert-editor";
 import { FilterPills } from "@/components/filter-pills";
 import { CATEGORY_OPTIONS, parseCategory } from "@/lib/filters";
 import { formatCents, formatGrading, formatPercent, toneFor } from "@/lib/format";
@@ -93,6 +94,11 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                     {lot.setName}
                     {lot.cardNumber && ` · ${lot.cardNumber}`}
                   </p>
+                  {lot.category === "graded" && (
+                    <div className="mt-1">
+                      <CertEditor lotId={lot.lotId} certNumber={lot.certNumber} />
+                    </div>
+                  )}
                   <div className="mt-auto flex items-baseline justify-between gap-2 pt-2.5">
                     <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
                       {formatGrading(lot, lot.category)}
