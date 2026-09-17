@@ -66,7 +66,8 @@ export async function getDashboard(range: RangeValue, category: CategoryFilter) 
         profitCents: sumCents(realizedSales.profitCents),
         revenueCents: sumCents(realizedSales.revenueCents),
         units: sumCents(realizedSales.qty),
-        marketCents: sumCents(sql`${realizedSales.unitMarketCents}::bigint * ${realizedSales.qty}`),
+        cashSaleRevenueCents: sql<number>`coalesce(sum(${realizedSales.revenueCents}) filter (where ${realizedSales.type} = 'sell'), 0)`.mapWith(Number),
+        cashSaleMarketCents: sql<number>`coalesce(sum(${realizedSales.unitMarketCents}::bigint * ${realizedSales.qty}) filter (where ${realizedSales.type} = 'sell'), 0)`.mapWith(Number),
       })
       .from(realizedSales)
       .where(salesWhere),
@@ -83,6 +84,7 @@ export async function getDashboard(range: RangeValue, category: CategoryFilter) 
       .where(
         and(
           eq(transactionLines.direction, "in"),
+          eq(transactions.type, "buy"),
           since ? gte(transactions.occurredAt, since) : undefined,
           category === "all" ? undefined : sql`${lotCategory} = ${category}`,
         ),
@@ -116,6 +118,7 @@ export async function getDashboard(range: RangeValue, category: CategoryFilter) 
     db
       .select({
         lineId: realizedSales.lineId,
+        type: realizedSales.type,
         name: realizedSales.name,
         category: realizedSales.category,
         occurredAt: realizedSales.occurredAt,
@@ -144,7 +147,7 @@ export async function getDashboard(range: RangeValue, category: CategoryFilter) 
       tableFeesCents: category === "all" ? tableFees[0].cents : null,
     },
     buyPctOfMarket: b.marketCents > 0 ? b.paidCents / b.marketCents : null,
-    sellPctOfMarket: s.marketCents > 0 ? s.revenueCents / s.marketCents : null,
+    sellPctOfMarket: s.cashSaleMarketCents > 0 ? s.cashSaleRevenueCents / s.cashSaleMarketCents : null,
     byCategory,
     byMonth: fillMonths(byMonth, since),
     recentSales,

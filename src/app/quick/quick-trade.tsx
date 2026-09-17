@@ -3,9 +3,10 @@
 import { useState, useTransition } from "react";
 import {
   CONDITIONS,
+  GRADE_OPTIONS,
   GRADERS,
   parseDollarsToCents,
-  priceKeyFor,
+  suggestMarketCents,
   type Condition,
   type Grading,
 } from "@/lib/domain";
@@ -13,12 +14,13 @@ import { formatCents, formatGrading, formatPercent, formatSignedCents, toneFor }
 import type { CatalogResult, EventOption, StockResult } from "@/lib/queries";
 import { recordBuyAction, recordSaleAction } from "./actions";
 import { CatalogPicker, StockPicker } from "./item-pickers";
+import { TradeForm } from "./trade-form";
 import { WherePicker, type Where } from "./where-picker";
 
-type Mode = "sell" | "buy";
-type Receipt = { mode: Mode; text: string; detail: string; tone: number };
+type Mode = "sell" | "buy" | "trade";
+type Receipt = { text: string; detail: string; tone: number };
 
-const GRADES = ["10", "9.5", "9", "8.5", "8", "7", "6", "5", "4", "3", "2", "1"];
+const MODE_LABELS: Record<Mode, string> = { sell: "Sell", buy: "Buy", trade: "Trade" };
 
 export function QuickTrade({
   initialEvents,
@@ -50,16 +52,12 @@ export function QuickTrade({
 
   const selected = mode === "sell" ? lot : item;
 
-  let suggestedMarketCents: number | null = null;
-  if (mode === "sell" && lot) {
-    suggestedMarketCents = lot.unitMarketCents;
-  } else if (mode === "buy" && item) {
-    const base = item.prices[priceKeyFor(item.kind, grading)];
-    if (base != null) {
-      const multiplier = item.kind === "single" && !grading.grader && grading.condition ? multipliers[grading.condition] : 1;
-      suggestedMarketCents = Math.round(base * multiplier);
-    }
-  }
+  const suggestedMarketCents =
+    mode === "sell" && lot
+      ? lot.unitMarketCents
+      : mode === "buy" && item
+        ? suggestMarketCents(item.kind, item.prices, grading, multipliers)
+        : null;
 
   const priceCents = parseDollarsToCents(price);
   const feesCents = fees.trim() === "" ? 0 : parseDollarsToCents(fees);
@@ -121,7 +119,6 @@ export function QuickTrade({
         });
         if (!result.ok) return setError(result.error);
         setReceipt({
-          mode,
           text: `Sold ${lot.name}${qty > 1 ? ` ×${qty}` : ""} for ${formatCents(priceCents * qty)}`,
           detail: `${formatSignedCents(result.profitCents)} profit`,
           tone: result.profitCents,
@@ -139,7 +136,6 @@ export function QuickTrade({
         if (!result.ok) return setError(result.error);
         const equity = (marketCents - priceCents) * qty - feesCents;
         setReceipt({
-          mode,
           text: `Bought ${item.name}${qty > 1 ? ` ×${qty}` : ""} for ${formatCents(priceCents * qty + feesCents)}`,
           detail: `${formatSignedCents(equity)} vs market`,
           tone: equity,
@@ -151,8 +147,8 @@ export function QuickTrade({
 
   return (
     <div className="mx-auto max-w-md space-y-4">
-      <div role="tablist" aria-label="Transaction type" className="grid grid-cols-2 gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-900">
-        {(["sell", "buy"] as const).map((m) => (
+      <div role="tablist" aria-label="Transaction type" className="grid grid-cols-3 gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-900">
+        {(["sell", "buy", "trade"] as const).map((m) => (
           <button
             key={m}
             type="button"
@@ -165,7 +161,7 @@ export function QuickTrade({
                 : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
             }`}
           >
-            {m === "sell" ? "Sell" : "Buy"}
+            {MODE_LABELS[m]}
           </button>
         ))}
       </div>
@@ -198,7 +194,9 @@ export function QuickTrade({
         </div>
       )}
 
-      {!selected ? (
+      {mode === "trade" ? (
+        <TradeForm where={where} multipliers={multipliers} onRecorded={setReceipt} />
+      ) : !selected ? (
         mode === "sell" ? (
           <StockPicker
             onPick={(picked) => {
@@ -281,7 +279,7 @@ export function QuickTrade({
                     onChange={(e) => changeGrading({ ...grading, grade: e.target.value })}
                     className="h-11 flex-1 rounded-lg border border-zinc-300 bg-white px-3 dark:border-zinc-700 dark:bg-zinc-900"
                   >
-                    {GRADES.map((g) => (
+                    {GRADE_OPTIONS.map((g) => (
                       <option key={g}>{g}</option>
                     ))}
                   </select>

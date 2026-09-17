@@ -2,7 +2,7 @@
 
 Inventory and profit tracking for Pokémon TCG vendors. Track every card and sealed product you
 own at today's market price, record buys and sales at card shows, and see whether the business
-is actually making money — by category, by date range, and after table fees.
+is actually making money, broken down by category and date range, after table fees.
 
 **Stack:** Next.js 16 (App Router, Server Components) · TypeScript · PostgreSQL 17 · Drizzle ORM · Tailwind CSS 4
 

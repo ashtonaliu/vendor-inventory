@@ -58,7 +58,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
         <StatCard
           label="Buy / sell vs market"
           value={`${formatPercent(data.buyPctOfMarket)} / ${formatPercent(data.sellPctOfMarket)}`}
-          detail="Avg price paid and received as % of market"
+          detail="Cash buys and sales as % of market"
         />
       </section>
 
@@ -120,6 +120,11 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
                     <td className="px-4 py-2.5">
                       {sale.name}
                       {sale.qty > 1 && <span className="text-zinc-500 dark:text-zinc-400"> ×{sale.qty}</span>}
+                      {sale.type === "trade" && (
+                        <span className="ml-2 rounded bg-violet-100 px-1.5 py-0.5 text-[11px] font-medium text-violet-800 dark:bg-violet-950 dark:text-violet-200">
+                          Traded
+                        </span>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500 dark:text-zinc-400">{dateLabel.format(sale.occurredAt)}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500 dark:text-zinc-400">{channelLabel[sale.channel]}</td>

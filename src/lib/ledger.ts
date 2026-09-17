@@ -1,7 +1,7 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { lots, transactionLines, transactions } from "@/db/schema";
-import type { Channel, Condition } from "@/lib/domain";
+import { computeTrade, type Channel, type Condition } from "@/lib/domain";
 
 export class InsufficientStockError extends Error {
   constructor(lotId: number, qty: number) {
@@ -118,6 +118,97 @@ export async function recordSale(input: SaleInput) {
       unitPriceCents: input.unitPriceCents,
       unitMarketCents: input.unitMarketCents,
     });
+
+    return { transactionId: txn.id };
+  });
+}
+
+export type TradeInput = {
+  give: { lotId: number; qty: number; unitMarketCents: number }[];
+  get: {
+    itemId: number;
+    condition: Condition | null;
+    grader: string | null;
+    grade: string | null;
+    qty: number;
+    unitMarketCents: number;
+  }[];
+  cashInCents: number;
+  cashOutCents: number;
+  occurredAt: Date;
+  eventId?: number | null;
+  channel: Channel;
+  notes?: string;
+};
+
+export async function recordTrade(input: TradeInput) {
+  return db.transaction(async (tx) => {
+    const costs: number[] = [];
+    for (const line of input.give) {
+      const [updated] = await tx
+        .update(lots)
+        .set({ qtyRemaining: sql`${lots.qtyRemaining} - ${line.qty}` })
+        .where(and(eq(lots.id, line.lotId), gte(lots.qtyRemaining, line.qty)))
+        .returning({ unitCostCents: lots.unitCostCents });
+      if (!updated) throw new InsufficientStockError(line.lotId, line.qty);
+      costs.push(updated.unitCostCents);
+    }
+
+    const trade = computeTrade(
+      input.give.map((l, i) => ({ ...l, unitCostCents: costs[i] })),
+      input.get,
+      input.cashInCents,
+      input.cashOutCents,
+    );
+
+    const [txn] = await tx
+      .insert(transactions)
+      .values({
+        type: "trade",
+        occurredAt: input.occurredAt,
+        eventId: input.eventId ?? null,
+        channel: input.channel,
+        cashInCents: input.cashInCents,
+        cashOutCents: input.cashOutCents,
+        notes: input.notes,
+      })
+      .returning({ id: transactions.id });
+
+    await tx.insert(transactionLines).values(
+      input.give.map((line, i) => ({
+        transactionId: txn.id,
+        lotId: line.lotId,
+        direction: "out" as const,
+        qty: line.qty,
+        unitPriceCents: Math.round(trade.lineProceedsCents[i] / line.qty),
+        unitMarketCents: line.unitMarketCents,
+      })),
+    );
+
+    for (const line of input.get) {
+      const [lot] = await tx
+        .insert(lots)
+        .values({
+          itemId: line.itemId,
+          condition: line.condition,
+          grader: line.grader,
+          grade: line.grade,
+          qtyAcquired: line.qty,
+          qtyRemaining: line.qty,
+          unitCostCents: line.unitMarketCents,
+          acquiredAt: input.occurredAt,
+        })
+        .returning({ id: lots.id });
+
+      await tx.insert(transactionLines).values({
+        transactionId: txn.id,
+        lotId: lot.id,
+        direction: "in",
+        qty: line.qty,
+        unitPriceCents: line.unitMarketCents,
+        unitMarketCents: line.unitMarketCents,
+      });
+    }
 
     return { transactionId: txn.id };
   });

@@ -1,11 +1,21 @@
 "use server";
 
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { events, items, realizedSales } from "@/db/schema";
-import { CHANNELS, CONDITIONS, GRADERS, ITEM_KINDS, isValidGrade, type Channel, type Condition } from "@/lib/domain";
-import { InsufficientStockError, recordBuy, recordSale } from "@/lib/ledger";
+import {
+  CHANNELS,
+  CONDITIONS,
+  GRADERS,
+  ITEM_KINDS,
+  isValidGrade,
+  type Channel,
+  type Condition,
+  type Grading,
+  type ItemKind,
+} from "@/lib/domain";
+import { InsufficientStockError, recordBuy, recordSale, recordTrade } from "@/lib/ledger";
 import type { CatalogResult, EventOption } from "@/lib/queries";
 
 // Server Functions are reachable by direct POST, so every input is re-validated here.
@@ -36,6 +46,18 @@ async function resolveWhere(eventId: unknown, channel: unknown): Promise<Where |
 
 function revalidateAll() {
   revalidatePath("/", "layout");
+}
+
+function normalizeGrading(kind: ItemKind, input: Partial<Grading> | null | undefined): Grading | string {
+  if (kind === "sealed") return { condition: null, grader: null, grade: null };
+  if (input?.grader != null) {
+    const grade = Number(input.grade);
+    if (!GRADERS.includes(input.grader as (typeof GRADERS)[number])) return "Pick a grading company.";
+    if (!isValidGrade(grade)) return "Grades go from 1 to 10 in half steps.";
+    return { condition: null, grader: input.grader, grade: String(grade) };
+  }
+  if (!CONDITIONS.includes(input?.condition as Condition)) return "Pick a condition.";
+  return { condition: input!.condition!, grader: null, grade: null };
 }
 
 export type SaleRequest = {
@@ -108,18 +130,8 @@ export async function recordBuyAction(input: BuyRequest): Promise<Result<{ trans
   const [item] = await db.select({ kind: items.kind }).from(items).where(eq(items.id, input.itemId));
   if (!item) return { ok: false, error: "That item doesn't exist." };
 
-  let grading: { condition: Condition | null; grader: string | null; grade: string | null };
-  if (item.kind === "sealed") {
-    grading = { condition: null, grader: null, grade: null };
-  } else if (input.grader != null) {
-    const grade = Number(input.grade);
-    if (!GRADERS.includes(input.grader as (typeof GRADERS)[number])) return { ok: false, error: "Pick a grading company." };
-    if (!isValidGrade(grade)) return { ok: false, error: "Grades go from 1 to 10 in half steps." };
-    grading = { condition: null, grader: input.grader, grade: String(grade) };
-  } else {
-    if (!CONDITIONS.includes(input.condition as Condition)) return { ok: false, error: "Pick a condition." };
-    grading = { condition: input.condition, grader: null, grade: null };
-  }
+  const grading = normalizeGrading(item.kind, input);
+  if (typeof grading === "string") return { ok: false, error: grading };
 
   const where = await resolveWhere(input.eventId, input.channel);
   if (typeof where === "string") return { ok: false, error: where };
@@ -180,4 +192,78 @@ export async function createEventAction(input: NewEventRequest): Promise<Result<
 
   revalidateAll();
   return { ok: true, event };
+}
+
+export type TradeRequest = {
+  give: { lotId: number; qty: number; unitMarketCents: number }[];
+  get: (Grading & { itemId: number; qty: number; unitMarketCents: number })[];
+  cashInCents: number;
+  cashOutCents: number;
+  eventId: number | null;
+  channel: Channel;
+};
+
+const MAX_TRADE_LINES = 50;
+
+export async function recordTradeAction(input: TradeRequest): Promise<Result<{ transactionId: number; profitCents: number }>> {
+  const give = Array.isArray(input?.give) ? input.give : [];
+  const get = Array.isArray(input?.get) ? input.get : [];
+
+  if (give.length === 0) return { ok: false, error: "Add at least one card you're giving." };
+  if (get.length === 0) return { ok: false, error: "Add at least one card you're getting. For cash only, use Sell." };
+  if (give.length > MAX_TRADE_LINES || get.length > MAX_TRADE_LINES) return { ok: false, error: "That's too many items for one trade." };
+  if (new Set(give.map((l) => l.lotId)).size !== give.length) return { ok: false, error: "The same card is listed twice on your side." };
+
+  for (const line of give) {
+    if (!isId(line?.lotId) || !isQty(line.qty)) return { ok: false, error: "Check the quantities on your side." };
+    if (!isCents(line.unitMarketCents, { min: 1 })) return { ok: false, error: "Every card you're giving needs a market price above $0." };
+  }
+  for (const line of get) {
+    if (!isId(line?.itemId) || !isQty(line.qty)) return { ok: false, error: "Check the quantities on their side." };
+    if (!isCents(line.unitMarketCents, { min: 1 })) return { ok: false, error: "Every card you're getting needs a market price above $0." };
+  }
+  if (!isCents(input.cashInCents) || !isCents(input.cashOutCents)) return { ok: false, error: "Enter cash as a dollar amount." };
+  if (input.cashInCents > 0 && input.cashOutCents > 0) return { ok: false, error: "Cash can only go one direction." };
+
+  const kinds = new Map(
+    (await db.select({ id: items.id, kind: items.kind }).from(items).where(inArray(items.id, get.map((l) => l.itemId)))).map(
+      (r) => [r.id, r.kind],
+    ),
+  );
+  const normalizedGet: TradeRequest["get"] = [];
+  for (const line of get) {
+    const kind = kinds.get(line.itemId);
+    if (!kind) return { ok: false, error: "One of the cards you're getting doesn't exist." };
+    const grading = normalizeGrading(kind, line);
+    if (typeof grading === "string") return { ok: false, error: grading };
+    normalizedGet.push({ itemId: line.itemId, qty: line.qty, unitMarketCents: line.unitMarketCents, ...grading });
+  }
+
+  const where = await resolveWhere(input.eventId, input.channel);
+  if (typeof where === "string") return { ok: false, error: where };
+
+  try {
+    const { transactionId } = await recordTrade({
+      give: give.map(({ lotId, qty, unitMarketCents }) => ({ lotId, qty, unitMarketCents })),
+      get: normalizedGet,
+      cashInCents: input.cashInCents,
+      cashOutCents: input.cashOutCents,
+      occurredAt: new Date(),
+      ...where,
+    });
+
+    const [row] = await db
+      .select({ profitCents: sql<number>`coalesce(sum(${realizedSales.profitCents}), 0)`.mapWith(Number) })
+      .from(realizedSales)
+      .where(eq(realizedSales.transactionId, transactionId));
+
+    revalidateAll();
+    return { ok: true, transactionId, profitCents: row.profitCents };
+  } catch (err) {
+    if (err instanceof InsufficientStockError) {
+      return { ok: false, error: "One of your cards isn't in stock anymore. It may have just sold." };
+    }
+    console.error("recordTradeAction failed", err);
+    return { ok: false, error: "Couldn't save the trade. Try again." };
+  }
 }
