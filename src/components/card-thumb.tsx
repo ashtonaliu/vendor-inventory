@@ -21,7 +21,12 @@ export function CardThumb({
     return (
       // Card art comes from arbitrary external hosts once price sync fills it in.
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={imageUrl} alt={name} loading="lazy" className="aspect-[63/88] w-full rounded-lg object-cover" />
+      <img
+        src={imageUrl}
+        alt={name}
+        loading="lazy"
+        className={`aspect-[63/88] w-full rounded-lg ${category === "sealed" ? "bg-white object-contain p-1" : "object-cover"}`}
+      />
     );
   }
 

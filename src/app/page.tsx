@@ -4,7 +4,7 @@ import { ProfitChart } from "@/components/profit-chart";
 import { StatCard } from "@/components/stat-card";
 import { CATEGORY_OPTIONS, parseCategory, parseRange, RANGE_OPTIONS } from "@/lib/filters";
 import { formatCents, formatPercent, formatSignedCents, toneFor } from "@/lib/format";
-import { getDashboard } from "@/lib/queries";
+import { getDashboard, getLastPriceSync } from "@/lib/queries";
 
 const categoryLabel = { single: "Singles", sealed: "Sealed", graded: "Graded" } as const;
 const channelLabel = { show: "Card show", ebay: "eBay", tcgplayer: "TCGplayer", local: "Local", other: "Other" } as const;
@@ -14,7 +14,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
   const params = await searchParams;
   const range = parseRange(params);
   const category = parseCategory(params);
-  const data = await getDashboard(range, category);
+  const [data, lastSync] = await Promise.all([getDashboard(range, category), getLastPriceSync()]);
 
   const { inventory, realized } = data;
   const netAfterFees = realized.tableFeesCents == null ? null : realized.profitCents - realized.tableFeesCents;
@@ -25,7 +25,11 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">How the business is doing</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {lastSync?.dataAsOf
+              ? `TCGplayer market prices as of ${dateLabel.format(new Date(`${lastSync.dataAsOf}T12:00:00`))}`
+              : "Market prices haven't been synced yet"}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <FilterPills label="Date range" pathname="/" params={params} paramKey="range" options={RANGE_OPTIONS} current={range} />

@@ -10,7 +10,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx --env-file=.env.local src/db/seed.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "prices:sync": "tsx --env-file=.env.local src/scripts/sync-prices.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

@@ -15,6 +15,27 @@
       "when": 1789632488416,
       "tag": "0001_profit_views",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789635339427,
+      "tag": "0002_drop_external_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789635339743,
+      "tag": "0003_tcgplayer_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789635340037,
+      "tag": "0004_price_sources_view",
+      "breakpoints": true
     }
   ]
 }

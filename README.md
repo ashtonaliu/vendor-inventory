@@ -20,6 +20,25 @@ Money is stored as integer cents throughout. Profit is never stored; it's derive
 `lot_valuations` and `realized_sales` SQL views in [`drizzle/0001_profit_views.sql`](drizzle/0001_profit_views.sql),
 so it can't drift out of sync with the transaction history.
 
+## Market prices
+
+Prices come from [TCGCSV](https://tcgcsv.com), a free daily mirror of TCGplayer's catalog and market
+prices. It refreshes once a day around 20:00 UTC.
+
+`npm run prices:sync` pulls every English Pokémon set (about 220 sets and 31,000 cards and sealed
+products, roughly 80 seconds):
+
+- Imports the full catalog with card images, so any card can be found on the Buy and Trade screens.
+- Links items you entered by hand to their TCGplayer product when exactly one product matches
+  (same set plus card number, or the exact name for sealed product).
+- Stores the latest market price on every catalog item, and adds a daily history row only for items
+  you've owned, so the database doesn't grow by 31,000 rows a day.
+- Records each run in `sync_runs`. A set that fails is retried, then skipped and logged, and the run is
+  marked `partial` rather than stopping. A unique index allows only one sync to run at a time.
+
+TCGplayer's market price is effectively the Near Mint price, so lower conditions still use the
+condition multipliers. Graded prices aren't included and are entered manually.
+
 ## Data model
 
 | Table | What it holds |
@@ -31,6 +50,7 @@ so it can't drift out of sync with the transaction history.
 | `price_snapshots` | Daily market price history per item and price key (`NM`, `SEALED`, `PSA10`) |
 | `events` | Card shows and their table fees |
 | `condition_multipliers` | Discount applied to NM prices for LP / MP / HP / DMG |
+| `sync_runs` | One row per price sync, with counts and any per-set errors |
 
 ## Local setup (macOS)
 
@@ -43,6 +63,7 @@ cp .env.example .env.local   # then set your username in DATABASE_URL
 npm install
 npm run db:migrate
 npm run db:seed              # optional: sample inventory and sales
+npm run prices:sync          # import the catalog and current prices
 npm run dev
 ```
 
@@ -58,5 +79,6 @@ Postgres isn't set to start at login, so after a restart run the `pg_ctl ... sta
 | `npm run dev` | Start the dev server |
 | `npm run db:generate` | Generate a migration after editing `src/db/schema.ts` |
 | `npm run db:migrate` | Apply pending migrations |
-| `npm run db:seed` | Reset the database to sample data (**deletes existing data**) |
+| `npm run db:seed` | Reset the database to sample data (**deletes existing data**, including the catalog; run `prices:sync` after) |
+| `npm run prices:sync` | Import the TCGplayer catalog and today's prices. `-- --only "Evolving Skies"` limits it to matching sets |
 | `npm run db:studio` | Browse the database in Drizzle Studio |

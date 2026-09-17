@@ -1,7 +1,8 @@
-import { and, asc, desc, eq, gt, gte, ilike, inArray, sql, type SQL, type SQLWrapper } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, ilike, inArray, isNotNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { db } from "@/db";
 import {
   conditionMultipliers,
+  syncRuns,
   events,
   items,
   latestPrices,
@@ -207,6 +208,7 @@ export async function searchStock(query: string, limit = 20) {
       name: lotValuations.name,
       setName: lotValuations.setName,
       cardNumber: lotValuations.cardNumber,
+      imageUrl: lotValuations.imageUrl,
       category: lotValuations.category,
       condition: lotValuations.condition,
       grader: lotValuations.grader,
@@ -223,7 +225,7 @@ export async function searchStock(query: string, limit = 20) {
 
 export type StockResult = Awaited<ReturnType<typeof searchStock>>[number];
 
-export async function searchCatalog(query: string, limit = 20) {
+export async function searchCatalog(query: string, limit = 30) {
   const found = await db
     .select({
       itemId: items.id,
@@ -231,6 +233,7 @@ export async function searchCatalog(query: string, limit = 20) {
       name: items.name,
       setName: items.setName,
       cardNumber: items.cardNumber,
+      imageUrl: items.imageUrl,
     })
     .from(items)
     .where(and(...matchAllTerms(itemSearchText, query)))
@@ -266,3 +269,13 @@ export async function getRecentEvents(limit = 8) {
 }
 
 export type EventOption = Awaited<ReturnType<typeof getRecentEvents>>[number];
+
+export async function getLastPriceSync() {
+  const [run] = await db
+    .select({ dataAsOf: syncRuns.dataAsOf, finishedAt: syncRuns.finishedAt, status: syncRuns.status })
+    .from(syncRuns)
+    .where(and(inArray(syncRuns.status, ["succeeded", "partial"]), isNotNull(syncRuns.dataAsOf)))
+    .orderBy(desc(syncRuns.finishedAt))
+    .limit(1);
+  return run ?? null;
+}

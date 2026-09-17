@@ -12,6 +12,12 @@ const inputClass =
 const resultClass =
   "flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-zinc-50 focus-visible:bg-zinc-50 focus-visible:outline-none dark:hover:bg-zinc-800/60 dark:focus-visible:bg-zinc-800/60";
 
+function Thumb({ src }: { src: string | null }) {
+  if (!src) return <span aria-hidden className="h-12 w-9 shrink-0 rounded bg-zinc-100 dark:bg-zinc-800" />;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="" loading="lazy" className="h-12 w-9 shrink-0 rounded object-cover" />;
+}
+
 function ResultList({ children, status }: { children: React.ReactNode; status?: React.ReactNode }) {
   return (
     <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
@@ -52,8 +58,9 @@ export function StockPicker({ onPick }: { onPick: (lot: StockResult) => void }) 
         {results.map((lot) => (
           <li key={lot.lotId}>
             <button type="button" onClick={() => onPick(lot)} className={resultClass}>
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">{lot.name}</span>
+              <Thumb src={lot.imageUrl} />
+              <span className="min-w-0 flex-1">
+                <span className="line-clamp-2 text-sm font-medium leading-snug">{lot.name}</span>
                 <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
                   {lot.setName}
                   {lot.cardNumber && ` · ${lot.cardNumber}`} · {formatGrading(lot, lot.category)}
@@ -106,8 +113,9 @@ export function CatalogPicker({ onPick }: { onPick: (item: CatalogResult) => voi
         {results.map((item) => (
           <li key={item.itemId}>
             <button type="button" onClick={() => onPick(item)} className={resultClass}>
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">{item.name}</span>
+              <Thumb src={item.imageUrl} />
+              <span className="min-w-0 flex-1">
+                <span className="line-clamp-2 text-sm font-medium leading-snug">{item.name}</span>
                 <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
                   {item.setName}
                   {item.cardNumber ? ` · ${item.cardNumber}` : item.kind === "sealed" ? " · Sealed" : ""}

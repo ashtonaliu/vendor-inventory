@@ -171,7 +171,14 @@ export async function createItemAction(input: NewItemRequest): Promise<Result<{ 
       setName: input.setName.trim(),
       cardNumber: input.kind === "single" && cardNumber ? cardNumber : null,
     })
-    .returning({ itemId: items.id, kind: items.kind, name: items.name, setName: items.setName, cardNumber: items.cardNumber });
+    .returning({
+      itemId: items.id,
+      kind: items.kind,
+      name: items.name,
+      setName: items.setName,
+      cardNumber: items.cardNumber,
+      imageUrl: items.imageUrl,
+    });
 
   return { ok: true, item: { ...item, prices: {} } };
 }

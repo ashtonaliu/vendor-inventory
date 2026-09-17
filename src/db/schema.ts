@@ -32,8 +32,12 @@ export const items = pgTable(
     cardNumber: text("card_number"),
     variant: text("variant"),
     rarity: text("rarity"),
-    externalId: text("external_id").unique(),
+    tcgplayerProductId: integer("tcgplayer_product_id").unique(),
     imageUrl: text("image_url"),
+    // Latest TCGplayer market price for the NM (singles) or sealed price key.
+    // Full history is only kept in price_snapshots for items you've owned.
+    marketCents: integer("market_cents"),
+    marketAsOf: date("market_as_of"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -137,6 +141,21 @@ export const transactionLines = pgTable(
     check("qty_positive", sql`${t.qty} > 0`),
   ],
 );
+
+export const syncRuns = pgTable("sync_runs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  source: text("source").notNull(),
+  status: text("status").$type<"running" | "succeeded" | "partial" | "failed">().notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  dataAsOf: date("data_as_of"),
+  groupsTotal: integer("groups_total").notNull().default(0),
+  groupsFailed: integer("groups_failed").notNull().default(0),
+  productsSeen: integer("products_seen").notNull().default(0),
+  itemsLinked: integer("items_linked").notNull().default(0),
+  snapshotsWritten: integer("snapshots_written").notNull().default(0),
+  error: text("error"),
+});
 
 export type Category = "single" | "sealed" | "graded";
 
